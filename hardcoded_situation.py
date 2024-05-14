@@ -51,22 +51,21 @@ def assume_recursively(coeff_array, max_depth, target_unclear_indecies, assumed_
         )
     possible_patterns = np.array(possible_patterns)
     
-    pprint_patterns(possible_patterns)
-    
     # Pick up assumed indecies
     target_unclear_indecies = np.where(np.any(possible_patterns!=-1, axis=0))[0]
     
-    array_to_detect_must_be_zeros = possible_patterns==0
-    array_to_detect_must_be_zeros[possible_patterns==-1] = True # Ignore -1
-    must_be_zeros = np.all(array_to_detect_must_be_zeros, axis=0)
-    must_be_zeros = must_be_zeros[target_unclear_indecies]
+    # Determine position must not be bombs
+    array_to_detect_must_not_be_bombs = possible_patterns==0
+    must_not_be_bombs = np.all(array_to_detect_must_not_be_bombs, axis=0)
+    must_not_be_bombs = must_not_be_bombs[target_unclear_indecies]
     
-    array_to_detect_must_be_ones = possible_patterns==1
-    array_to_detect_must_be_ones[possible_patterns==-1] = True # Ignore -1
-    must_be_ones = np.all(array_to_detect_must_be_ones, axis=0)
-    must_be_ones = must_be_ones[target_unclear_indecies]
+    # Determine position must be bombs
+    array_to_detect_must_be_bombs = possible_patterns==1
+    must_be_bombs = np.all(array_to_detect_must_be_bombs, axis=0)
+    must_be_bombs = must_be_bombs[target_unclear_indecies]
     
-    return target_unclear_indecies, must_be_zeros, must_be_ones
+    
+    return target_unclear_indecies, must_not_be_bombs, must_be_bombs, possible_patterns
 
 def attempt_all_pattern(coeff_array, assumed_array, target_unclear_indecies):
     
@@ -77,13 +76,10 @@ def attempt_all_pattern(coeff_array, assumed_array, target_unclear_indecies):
     assumption_considered_eqs = consider_assumption(new_assuming_eqs, assumed_array)
     
     # Pick up all possible value pattern based on each equations. 
-    possible_patterns_each_eq = detect_possible_patterns_each_eq(assumption_considered_eqs)
-    
-    # Consider all equations at the same time.
-    possible_patterns_all_eq = consider_eq_combination(coeff_array=assumption_considered_eqs, patterns=possible_patterns_each_eq)
+    possible_patterns = detect_possible_patterns(assumption_considered_eqs, assumed_array)
     
     # Apply the assumption to patterns
-    possible_patterns_assumption_applied = apply_assumption_on_possible_patterns(patterns=possible_patterns_all_eq, assumed_array=assumed_array)
+    possible_patterns_assumption_applied = apply_assumption_on_possible_patterns(patterns=possible_patterns, assumed_array=assumed_array)
     
     return possible_patterns_assumption_applied
 
@@ -107,39 +103,52 @@ def consider_assumption(coeff_array, assumed_array):
         considered.append(considered_coeff)
     return considered
 
-def detect_possible_patterns_each_eq(coeff_array):
+def detect_possible_patterns(coeff_array, assumed_array):
     # Detect possible bomb patterns.
+    return _detect_possible_patterns(coeff_array, assumed_array)
+    
+
+def _detect_possible_patterns(coeff_array, assumed_array):
     possible_patterns = []
-    for coeff in coeff_array:
-        # Detect non-zero coeff valuables.
-        non_zero_indexes = np.where(coeff["coeff"]==1)[0]
+    
+    # Consider the first equation
+    coeff = coeff_array[0]
+    
+    # Detect non-zero coeff valuables.
+    non_zero_indexes = np.where(coeff["coeff"]==1)[0]
+    
+    tuple_pairs = list(itertools.combinations(non_zero_indexes, coeff["sum"]))
+    if tuple_pairs.__len__() == 0:
+        # print("assumed_array was confirmed INVALID.")
+        # print("coeff['coeff']")
+        # pprint_coeffs(coeff)
+        # print("assumed_array")
+        # pprint_patterns([assumed_array])
+        # print("========================")
+        return []
         
-        for pair in itertools.combinations(non_zero_indexes, coeff["sum"]):
-            _tmp = np.zeros_like(coeff["coeff"]) - 1
-            _tmp[non_zero_indexes] = 0
-            for index in pair:
-                _tmp[index] = 1
-            possible_patterns.append(_tmp)
+    
+    for tuple_pair in tuple_pairs:
+        further_assumed_array = copy.deepcopy(assumed_array)
+        further_assumed_array[non_zero_indexes] = 0
+        further_assumed_array[list(tuple_pair)] = 1
+        
+        if tuple_pairs.__len__() == 1 and coeff_array.__len__()==1:
+            print("assumed_array was confirmed VALID.")
+            print("coeff['coeff']")
+            pprint_coeffs(coeff)
+            print("further_assumed_array")
+            pprint_patterns([further_assumed_array])
+            print("========================")
+            return [further_assumed_array]
+        
+        # Go to the next equation
+        further_considred_eqs = consider_assumption(coeff_array[1:], further_assumed_array)
+        further_considered_possible_patterns = _detect_possible_patterns(further_considred_eqs, further_assumed_array)
+        possible_patterns.extend(further_considered_possible_patterns)
+            
     possible_patterns = np.array(possible_patterns)
     return possible_patterns
-
-def consider_eq_combination(coeff_array, patterns):
-    valid_patterns = []
-    for pattern in patterns:
-        is_valid = True
-        for coeff in coeff_array:
-            _prod = coeff['coeff'] * pattern
-            _prod[pattern == -1] = 0
-            _sum = np.sum(_prod)
-            
-            if coeff['sum'] != _sum:
-                is_valid = False
-                break
-        
-        if is_valid:
-            valid_patterns.append(pattern)
-    valid_patterns = np.array(valid_patterns)
-    return valid_patterns
 
 def apply_assumption_on_possible_patterns(patterns, assumed_array):
     for pattern in patterns:
@@ -174,50 +183,73 @@ bombs_array = np.array([
     [-1,-1,-1,-1,-1,-1,-1],
     [-1,-1,-1,-1,-1,-1,-1]
     ])
-# #  pattern: 1 2 2 1
-# bombs_array = np.array([
-#     [-1,-1,-1,-1,-1,-1,-1],
-#     [-1,-1, 1, 2, 2, 1,-1],
-#     [-1,-1, 1, 0, 1,-1,-1],
-#     [-1,-1, 1, 0, 1,-1,-1],
-#     [-1,-1, 1, 0, 1,-1,-1],
-#     [-1,-1, 1, 1, 1,-1,-1],
-#     [-1,-1,-1,-1,-1,-1,-1],
-#     [-1,-1,-1,-1,-1,-1,-1],
-#     [-1,-1,-1,-1,-1,-1,-1]
-#     ])
+#  pattern: 1 2 2 1
+bombs_array = np.array([
+    [-1,-1,-1,-1,-1,-1,-1],
+    [-1,-1, 1, 2, 2, 1,-1],
+    [-1,-1, 1, 0, 0, 1,-1],
+    [-1,-1, 1, 0, 0, 1,-1],
+    [-1,-1, 1, 0, 0, 1,-1],
+    [-1,-1, 1, 1, 1, 1,-1],
+    [-1,-1,-1,-1,-1,-1,-1],
+    [-1,-1,-1,-1,-1,-1,-1],
+    [-1,-1,-1,-1,-1,-1,-1]
+    ])
 
-print("Bomb indications. -1: assumable, >=0: number of surrounding bombs")
-pprint(bombs_array)
 
 def pprint_patterns(patterns):
-    print("-> pprint_patterns()")
     for pattern in patterns:
-        pprint(np.reshape(pattern, bombs_array.shape))
-    
-    print("<- pprint_patterns()")
+        pattern = copy.deepcopy(pattern)
+        pattern = np.reshape(pattern, bombs_array.shape)
+        pattern[bombs_array>=0] = bombs_array[bombs_array>=0]
+        pprint(pattern)
+
+def pprint_coeffs(coeff):
+    pattern = copy.deepcopy(coeff['coeff'])
+    pattern = np.reshape(pattern, bombs_array.shape)
+    pattern[bombs_array>=0] = bombs_array[bombs_array>=0]
+    pattern[coeff['sum_index'][0], coeff['sum_index'][1]] *= 10
+    pprint(pattern)
+
+def pprint_bombs_string(bombs_array):
+    bombs_array_in_list = bombs_array.tolist()
+    for row in bombs_array_in_list:
+        for ii, elem in enumerate(row):
+            if elem == -1:
+                row[ii] = "-"
+            elif elem == -10:
+                row[ii] = "N"
+            elif elem == 10:
+                row[ii] = "B"
+            else:
+                row[ii] = str(elem)
+        
+        print(",".join(row))
+
+print("Bomb indications")
+pprint_bombs_string(bombs_array)    
 
 coeff_array = gen_coeff_array(bombs_array)
 
 target_unclear_indecies=[3]
 assumed_array=np.zeros_like(coeff_array[0]['coeff'])-1
 
-target_unclear_indecies, must_be_zeros, must_be_ones = assume_recursively(
+target_unclear_indecies, must_not_be_bombs, must_be_bombs, possible_patterns = assume_recursively(
     coeff_array=coeff_array,
     target_unclear_indecies=target_unclear_indecies,
     max_depth=2)
 
-pprint(must_be_ones)
-pprint(must_be_zeros)
 
+# -1:unclear, 10:detected bomb, -10:dectect no bomb, 0~9: number of bombs around it.
 assumed_bombs_array = copy.deepcopy(bombs_array)
 
-for target_unclear_index, must_be_zero, must_be_one in zip(target_unclear_indecies, must_be_zeros, must_be_ones):
+for target_unclear_index, must_not_be_bomb, must_be_bomb in zip(target_unclear_indecies, must_not_be_bombs, must_be_bombs):
     detected_sub = np.unravel_index(target_unclear_index, bombs_array.shape)
-    if must_be_zero:
+    if must_not_be_bomb:
         assumed_bombs_array[detected_sub[0],detected_sub[1]] = -10
-    elif must_be_one:
+    elif must_be_bomb:
         assumed_bombs_array[detected_sub[0],detected_sub[1]] = 10
-    
-print("Detected by the following pattern. -1:unclear, 10:detected bomb, -10:dectect no bomb, 0~9: number of bombs around it.")
-pprint(assumed_bombs_array)
+
+
+print("Detected by the following pattern. ")
+pprint_bombs_string(assumed_bombs_array)
