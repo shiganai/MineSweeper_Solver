@@ -3,26 +3,26 @@ from pprint import pprint
 import itertools
 import copy
 
-def gen_coeff_array(bombs_array):
+def gen_coeff_array(bombs_indicator_array):
     # 端の条件はまだ考慮していない。だから端が０じゃないとエラー起きる。
     coeff_array = []
-    for index1 in range(bombs_array.shape[0]):
-        for index2 in range(bombs_array.shape[1]):
+    for index1 in range(bombs_indicator_array.shape[0]):
+        for index2 in range(bombs_indicator_array.shape[1]):
             # When the position shows bomb indication number, create an equation.
-            if bombs_array[index1,index2] > 0:
+            if bombs_indicator_array[index1,index2] > 0:
                 # Initialize all coefficient with 0.
-                coeff_array_each_non_zero = np.zeros_like(bombs_array)
+                coeff_array_each_non_zero = np.zeros_like(bombs_indicator_array)
                 
                 # Set 1 to "target for simulation" pos.
                 for coeff_index1 in range(index1-1,index1+2):
                     for coeff_index2 in range(index2-1,index2+2):
-                        if bombs_array[coeff_index1, coeff_index2] == -1:
+                        if bombs_indicator_array[coeff_index1, coeff_index2] == -1:
                             coeff_array_each_non_zero[coeff_index1, coeff_index2] = 1
                 
                 # Flatten the array. Now each position have index as a valuable.
                 _dict = {}
                 _dict["coeff"] = coeff_array_each_non_zero.flatten()
-                _dict["sum"] = bombs_array[index1,index2]
+                _dict["sum"] = bombs_indicator_array[index1,index2]
                 _dict["sum_index"] = [index1,index2]
                 coeff_array.append(_dict)
     
@@ -57,15 +57,16 @@ def assume_recursively(coeff_array, max_depth, target_unclear_indecies, assumed_
     # Determine position must not be bombs
     array_to_detect_must_not_be_bombs = possible_patterns==0
     must_not_be_bombs = np.all(array_to_detect_must_not_be_bombs, axis=0)
-    must_not_be_bombs = must_not_be_bombs[target_unclear_indecies]
     
     # Determine position must be bombs
     array_to_detect_must_be_bombs = possible_patterns==1
     must_be_bombs = np.all(array_to_detect_must_be_bombs, axis=0)
-    must_be_bombs = must_be_bombs[target_unclear_indecies]
     
+    detected_bombs = np.zeros_like(coeff_array[0]['coeff']) - 1
+    detected_bombs[must_not_be_bombs] = 0
+    detected_bombs[must_be_bombs] = 1
     
-    return target_unclear_indecies, must_not_be_bombs, must_be_bombs, possible_patterns
+    return detected_bombs, possible_patterns
 
 def attempt_all_pattern(coeff_array, assumed_array, target_unclear_indecies):
     
@@ -134,12 +135,12 @@ def _detect_possible_patterns(coeff_array, assumed_array):
         further_assumed_array[list(tuple_pair)] = 1
         
         if tuple_pairs.__len__() == 1 and coeff_array.__len__()==1:
-            print("assumed_array was confirmed VALID.")
-            print("coeff['coeff']")
-            pprint_coeffs(coeff)
-            print("further_assumed_array")
-            pprint_patterns([further_assumed_array])
-            print("========================")
+            # print("assumed_array was confirmed VALID.")
+            # print("coeff['coeff']")
+            # pprint_coeffs(coeff)
+            # print("further_assumed_array")
+            # pprint_patterns([further_assumed_array])
+            # print("========================")
             return [further_assumed_array]
         
         # Go to the next equation
@@ -160,7 +161,7 @@ def apply_assumption_on_possible_patterns(patterns, assumed_array):
 # -1: target of simulation
 # 0: Inside or too far
 # >0: number of surrounding bombs
-bombs_array = np.array([
+bombs_indicator_array = np.array([
     [-1,-1,-1,-1,-1,-1,-1],
     [-1,-1, 3, 1, 2,-1,-1],
     [-1,-1, 1, 0, 1,-1,-1],
@@ -172,7 +173,7 @@ bombs_array = np.array([
     [-1,-1,-1,-1,-1,-1,-1]
     ])
 #  pattern: 1 1 1
-bombs_array = np.array([
+bombs_indicator_array = np.array([
     [-1,-1,-1,-1,-1,-1,-1],
     [-1,-1, 1, 1, 1,-1,-1],
     [-1,-1, 1, 0, 1,-1,-1],
@@ -184,7 +185,7 @@ bombs_array = np.array([
     [-1,-1,-1,-1,-1,-1,-1]
     ])
 #  pattern: 1 2 2 1
-bombs_array = np.array([
+bombs_indicator_array = np.array([
     [-1,-1,-1,-1,-1,-1,-1],
     [-1,-1, 1, 2, 2, 1,-1],
     [-1,-1, 1, 0, 0, 1,-1],
@@ -200,56 +201,62 @@ bombs_array = np.array([
 def pprint_patterns(patterns):
     for pattern in patterns:
         pattern = copy.deepcopy(pattern)
-        pattern = np.reshape(pattern, bombs_array.shape)
-        pattern[bombs_array>=0] = bombs_array[bombs_array>=0]
+        pattern = np.reshape(pattern, bombs_indicator_array.shape)
+        pattern[bombs_indicator_array>=0] = bombs_indicator_array[bombs_indicator_array>=0]
         pprint(pattern)
 
 def pprint_coeffs(coeff):
     pattern = copy.deepcopy(coeff['coeff'])
-    pattern = np.reshape(pattern, bombs_array.shape)
-    pattern[bombs_array>=0] = bombs_array[bombs_array>=0]
+    pattern = np.reshape(pattern, bombs_indicator_array.shape)
+    pattern[bombs_indicator_array>=0] = bombs_indicator_array[bombs_indicator_array>=0]
     pattern[coeff['sum_index'][0], coeff['sum_index'][1]] *= 10
     pprint(pattern)
 
-def pprint_bombs_string(bombs_array):
-    bombs_array_in_list = bombs_array.tolist()
-    for row in bombs_array_in_list:
-        for ii, elem in enumerate(row):
-            if elem == -1:
-                row[ii] = "-"
-            elif elem == -10:
-                row[ii] = "N"
-            elif elem == 10:
-                row[ii] = "B"
+def pprint_bombs_string(bombs_indicator_array, detected_boms=None):
+    strings_to_show = np.empty_like(bombs_indicator_array, dtype=str)
+    if detected_boms is None:
+        detected_boms = np.zeros_like(bombs_indicator_array) - 1
+    
+    for index1 in range(strings_to_show.shape[0]):
+        for index2 in range(strings_to_show.shape[1]):
+            _indicator = bombs_indicator_array[index1,index2]
+            _dectedted = detected_boms[index1,index2]
+            
+            if _indicator >= 0:
+                strings_to_show[index1,index2] = str(_indicator)
+            elif _dectedted == 0:
+                strings_to_show[index1,index2] = 'N'
+            elif _dectedted == 1:
+                strings_to_show[index1,index2] = 'B'
             else:
-                row[ii] = str(elem)
-        
+                strings_to_show[index1,index2] = '-'
+    
+    strings_to_show = strings_to_show.tolist()
+    
+    for row in strings_to_show:
         print(",".join(row))
 
 print("Bomb indications")
-pprint_bombs_string(bombs_array)    
+pprint_bombs_string(bombs_indicator_array)    
 
-coeff_array = gen_coeff_array(bombs_array)
+coeff_array = gen_coeff_array(bombs_indicator_array)
 
 target_unclear_indecies=[3]
 assumed_array=np.zeros_like(coeff_array[0]['coeff'])-1
 
-target_unclear_indecies, must_not_be_bombs, must_be_bombs, possible_patterns = assume_recursively(
+detected_bombs, possible_patterns = assume_recursively(
     coeff_array=coeff_array,
     target_unclear_indecies=target_unclear_indecies,
     max_depth=2)
 
 
-# -1:unclear, 10:detected bomb, -10:dectect no bomb, 0~9: number of bombs around it.
-assumed_bombs_array = copy.deepcopy(bombs_array)
+print("Possible patterns")
+print("=================")
+for pattern in possible_patterns:
+    pattern = np.reshape(pattern, bombs_indicator_array.shape)
+    pprint_bombs_string(bombs_indicator_array, pattern)
+    print("=================")
 
-for target_unclear_index, must_not_be_bomb, must_be_bomb in zip(target_unclear_indecies, must_not_be_bombs, must_be_bombs):
-    detected_sub = np.unravel_index(target_unclear_index, bombs_array.shape)
-    if must_not_be_bomb:
-        assumed_bombs_array[detected_sub[0],detected_sub[1]] = -10
-    elif must_be_bomb:
-        assumed_bombs_array[detected_sub[0],detected_sub[1]] = 10
-
-
-print("Detected by the following pattern. ")
-pprint_bombs_string(assumed_bombs_array)
+detected_bombs = np.reshape(detected_bombs, bombs_indicator_array.shape)
+print("Thus, the following pattern must be the case.")
+pprint_bombs_string(bombs_indicator_array, detected_bombs)
