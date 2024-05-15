@@ -37,6 +37,18 @@ def example():
         [-1, 1, 1, 2, 3,-1,-1],
         [-1,-1,-1,-1,-1,-1,-1]
         ])
+    #  pattern: 1 2 2 1
+    bombs_indicator_array = np.array([
+        [-1,-1,-1,-1,-1,-1,-1],
+        [-1,-1, 1, 2, 2, 1,-1],
+        [-1,-1, 1, 0, 0, 1,-1],
+        [-1,-1, 1, 0, 0, 1,-1],
+        [-1,-1, 1, 0, 0, 1,-1],
+        [-1,-1, 1, 1, 1, 1,-1],
+        [-1,-1,-1,-1,-1,-1,-1],
+        [-1,-1,-1,-1,-1,-1,-1],
+        [-1,-1,-1,-1,-1,-1,-1]
+        ])
     
     _solver = solver(bombs_indicator_array=bombs_indicator_array)
     
@@ -47,7 +59,7 @@ def example():
         
     detected_bombs, possible_patterns = _solver.assume_recursively(
         target_unclear_indecies=target_unclear_indecies,
-        max_depth=2)
+        max_depth=6)
     
     
     print("Possible patterns")
@@ -98,27 +110,11 @@ class solver:
     #   -1: unassumed, 0: assumed no bomb, 1: assumed a bomb
     
     def assume_recursively(self, max_depth, target_unclear_indecies):
-        return self._assume_recursively(coeff_array=self.coeff_array, max_depth=max_depth, target_unclear_indecies=target_unclear_indecies)
-    
-    def _assume_recursively(self, coeff_array, max_depth, target_unclear_indecies, assumed_arrays=None, depth=None):
-        if assumed_arrays is None:
-            assumed_arrays=[np.zeros_like(coeff_array[0]['coeff'])-1]
-            depth = 0
+        # Initialize
+        assumed_arrays=[np.zeros_like(self.coeff_array[0]['coeff'])-1]
+        depth = 0
         
-        if depth > max_depth:
-            print(f"depth:{depth} > max_depth:{max_depth}")
-            return False
-        
-        possible_patterns = []
-        for assumed_array in assumed_arrays:
-            possible_patterns.extend(
-                self.attempt_all_pattern(
-                    coeff_array=coeff_array,
-                    assumed_array=assumed_array,
-                    target_unclear_indecies=target_unclear_indecies
-                )
-            )
-        possible_patterns = np.array(possible_patterns)
+        possible_patterns = self._assume_recursively(coeff_array=self.coeff_array, depth=depth, max_depth=max_depth, target_unclear_indecies=target_unclear_indecies, assumed_arrays=assumed_arrays)
         
         # Pick up assumed indecies
         target_unclear_indecies = np.where(np.any(possible_patterns!=-1, axis=0))[0]
@@ -131,11 +127,50 @@ class solver:
         array_to_detect_must_be_bombs = possible_patterns==1
         must_be_bombs = np.all(array_to_detect_must_be_bombs, axis=0)
         
-        detected_bombs = np.zeros_like(coeff_array[0]['coeff']) - 1
+        detected_bombs = np.zeros_like(self.coeff_array[0]['coeff']) - 1
         detected_bombs[must_not_be_bombs] = 0
         detected_bombs[must_be_bombs] = 1
         
         return detected_bombs, possible_patterns
+    
+    def _assume_recursively(self, coeff_array, depth, max_depth, target_unclear_indecies, assumed_arrays):
+        
+        target_unclear_indecies = np.array(target_unclear_indecies)
+        possible_patterns = []
+        
+        for assumed_array in assumed_arrays:
+            possible_patterns.extend(
+                self.attempt_all_pattern(
+                    coeff_array=coeff_array,
+                    assumed_array=assumed_array,
+                    target_unclear_indecies=target_unclear_indecies
+                )
+            )
+        possible_patterns = np.array(possible_patterns)
+        # Update assuming valuables.
+        updated_target_unclear_indecies = np.where(np.any(possible_patterns!=-1, axis=0))[0]
+        
+        depth += 1
+        
+        # When depth > max_depth, it means this is the manual limit.
+        if depth > max_depth:
+            print(f"depth:{depth} > max_depth:{max_depth}")
+            return possible_patterns
+        
+        # When target_unclear_indecies == updated_target_unclear_indecies,
+        #   it means next assumption won't change anything.
+        elif target_unclear_indecies.tolist() == updated_target_unclear_indecies.tolist():
+            print(f"All assumption are made at depth:{depth}")
+            return possible_patterns
+        
+        # Proceed to next step with updated_target_unclear_indecies and possible patterns
+        else:
+            return self._assume_recursively(
+                coeff_array=self.coeff_array, 
+                depth=depth, 
+                max_depth=max_depth, 
+                target_unclear_indecies=updated_target_unclear_indecies,
+                assumed_arrays=possible_patterns)
     
     def attempt_all_pattern(self, coeff_array, assumed_array, target_unclear_indecies):
         
@@ -288,4 +323,5 @@ class solver:
         
         for row in strings_to_show:
             print(",".join(row))
-    
+
+example()
