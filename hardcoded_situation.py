@@ -3,6 +3,8 @@ from pprint import pprint
 import itertools
 import copy
 
+is_debugging = False
+
 def gen_coeff_array(bombs_indicator_array):
     # 端の条件はまだ考慮していない。だから端が０じゃないとエラー起きる。
     coeff_array = []
@@ -118,16 +120,28 @@ def _detect_possible_patterns(coeff_array, assumed_array):
     # Detect non-zero coeff valuables.
     non_zero_indexes = np.where(coeff["coeff"]==1)[0]
     
+    # When the sum is negative, it means the so far assumption does not fullfill this equations.
+    if coeff['sum'] < 0:
+        if is_debugging:
+            print("assumed_array was confirmed INVALID.")
+            print("coeff['coeff']")
+            pprint_coeffs(coeff)
+            print("assumed_array")
+            pprint_patterns([assumed_array])
+            print("========================")
+        return []
+    
     tuple_pairs = list(itertools.combinations(non_zero_indexes, coeff["sum"]))
     
     # When there are no patterns such as coeff["sum"] is too big, return empty.
     if tuple_pairs.__len__() == 0:
-        # print("assumed_array was confirmed INVALID.")
-        # print("coeff['coeff']")
-        # pprint_coeffs(coeff)
-        # print("assumed_array")
-        # pprint_patterns([assumed_array])
-        # print("========================")
+        if is_debugging:
+            print("assumed_array was confirmed INVALID.")
+            print("coeff['coeff']")
+            pprint_coeffs(coeff)
+            print("assumed_array")
+            pprint_patterns([assumed_array])
+            print("========================")
         return []
     
     for tuple_pair in tuple_pairs:
@@ -137,23 +151,25 @@ def _detect_possible_patterns(coeff_array, assumed_array):
         
         # When there're no more equations to verify, it means this pattern is valid.
         if coeff_array.__len__()==1:
-            # print("assumed_array was confirmed VALID.")
-            # print("coeff['coeff']")
-            # pprint_coeffs(coeff)
-            # print("further_assumed_array")
-            # pprint_patterns([further_assumed_array])
-            # print("========================")
+            if is_debugging:
+                print("assumed_array was confirmed VALID.")
+                print("coeff['coeff']")
+                pprint_coeffs(coeff)
+                print("further_assumed_array")
+                pprint_patterns([further_assumed_array])
+                print("========================")
             possible_patterns.append(further_assumed_array)
         # When there're additional equations to verify, move on to them with adding more assumption.
         else:    
             # Go to the next equation
-            # print("assumed_array")
-            # pprint_patterns([assumed_array])
-            # print("coeff['coeff']")
-            # pprint_coeffs(coeff)
-            # print("further_assumed_array")
-            # pprint_patterns([further_assumed_array])
-            # print(f"tuple_pair: {tuple_pair}")
+            if is_debugging:
+                print("assumed_array")
+                pprint_patterns([assumed_array])
+                print("coeff['coeff']")
+                pprint_coeffs(coeff)
+                print("further_assumed_array")
+                pprint_patterns([further_assumed_array])
+                print(f"tuple_pair: {tuple_pair}")
             further_considred_eqs = consider_assumption(coeff_array[1:], further_assumed_array)
             further_considered_possible_patterns = _detect_possible_patterns(further_considred_eqs, further_assumed_array)
             possible_patterns.extend(further_considered_possible_patterns)
