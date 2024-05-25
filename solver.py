@@ -10,6 +10,8 @@ from pprint import pprint
 import itertools
 import copy
 
+# Explanation of values.
+# ==================================================
 # bombs_indicator_array = np.array([
 #     [-1,-1,-1,-1,-1,-1,-1],
 #     [-1,-1, 3, 1, 2,-1,-1],
@@ -24,6 +26,20 @@ import copy
 # -1: target of simulation
 # 0: Inside or too far
 # >0: number of surrounding bombs
+# ==================================================
+# coeff_array is an array for the following formatted dictionaries.
+#   "sum_index": [int,int]. The position of the indicating value, such as 1,2,3 ...
+#   "coeff": [0,0,1,1,1, ...]. This is a 1x? array. The positions of 1 means that is not yet assumed and it next to the indicating value.
+#   "sum": int. This is the indicating value.
+#   The following equation stands true using assumed_arrays desribed next.
+#   sum("coeff" * assumed_arrays = "sum")
+# ==================================================
+# assumed_arrays, possible_patterns: [[0,0,1,1,0, ...], [0,0,0,1,1, ...]]. They are arrays of possible patterns.
+#  -1: Not yet assumed.
+#   0: Assumed no bomb.
+#   1: Assumed a bomb.
+# ==================================================
+
 
 def example():
     bombs_indicator_array = np.array([
@@ -105,9 +121,6 @@ class solver:
         
         self.coeff_array = coeff_array
         return coeff_array
-    
-    # assumed_array. [-1,-1,0,1,0,-1,-1, ...]
-    #   -1: unassumed, 0: assumed no bomb, 1: assumed a bomb
     
     def assume_recursively(self, max_depth, target_unclear_indecies):
         # Initialize
