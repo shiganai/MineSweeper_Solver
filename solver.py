@@ -96,6 +96,9 @@ class solver:
         self.gen_coeff_array()
 
     def gen_coeff_array(self):
+        # This function picks up positions of possible bombs around indicating values.
+        # This funciton will define coeff_array.
+        
         bombs_indicator_array = self.bombs_indicator_array
         # 端の条件はまだ考慮していない。だから端が０じゃないとエラー起きる。
         coeff_array = []
@@ -123,10 +126,14 @@ class solver:
         return coeff_array
     
     def assume_recursively(self, max_depth, target_unclear_indecies):
+        # This function is an API for outer script to kick-start assumption.
+        
         # Initialize
+        # assumed_arrays is initialized with -1 meaning "not yet assumed"
         assumed_arrays=[np.zeros_like(self.coeff_array[0]['coeff'])-1]
         depth = 0
         
+        # Call recursive function for 
         possible_patterns = self._assume_recursively(coeff_array=self.coeff_array, depth=depth, max_depth=max_depth, target_unclear_indecies=target_unclear_indecies, assumed_arrays=assumed_arrays)
         
         # Pick up assumed indecies
@@ -147,6 +154,20 @@ class solver:
         return detected_bombs, possible_patterns
     
     def _assume_recursively(self, coeff_array, depth, max_depth, target_unclear_indecies, assumed_arrays):
+        # This function is a recursive function to detect all possible patterns until the process reaches to a certain depth or reaches to where no more assumption can be made.
+        # The algorithm for each recursive process:
+        #   1. Picks up all possible patterns for a given assumed_array.
+        #       This step will consider all patterns for non -1 position of assumed_array.
+        #       This may pick up new positions to consider.
+        #   2. Define updated_target_unclear_indecies based on the possible patterns. 
+        #       Non -1 positions means some assumptions are made for the positions and all of them are targets.
+        #   3. Update depth by 1. 
+        #       If the updated depth exceeds the given depth,it means the user does not want to waste resource anymore.
+        #       Return possible patterns.
+        #   4. Verify if any positions are assumed newly. 
+        #       If not, it means the process reach to where no more assumption can be made. 
+        #       Return possible patterns.
+        #   5. Proceed to next depth if no hit to step 3 and 4
         
         target_unclear_indecies = np.array(target_unclear_indecies)
         possible_patterns = []
@@ -186,6 +207,8 @@ class solver:
                 assumed_arrays=possible_patterns)
     
     def attempt_all_pattern(self, coeff_array, assumed_array, target_unclear_indecies):
+        # This function returns all possible patterns which releated to target_unclear_indecies.
+        # The assumption consider all existing conditions, meaning it will pick up new equations to consider for border assumed positions.
         
         # Pick up all equations related to targeting unclear indecies
         new_assuming_eqs = self.pick_up_equations(coeff_array, target_unclear_indecies)
@@ -202,6 +225,8 @@ class solver:
         return possible_patterns_assumption_applied
     
     def pick_up_equations(self, coeff_array, target_unclear_indecies):
+        # This function returns all equations related to given target_unclear_indecies.
+        
         picked_up = []
         for coeff in coeff_array:
             if np.any(coeff['coeff'][target_unclear_indecies] == 1):
@@ -209,6 +234,10 @@ class solver:
         return picked_up
     
     def consider_assumption(self, coeff_array, assumed_array):
+        # This function will apply current assumption to equations.
+        # Will convert 1 into 0 for where assumed_array is not -1, so that it is easy to pick up which position to assume new.
+        # When equations value is 1 and assumed_array is 1 for a position, it will reduce "sum" by 1.
+        
         considered = []
         for coeff in coeff_array:
             assumed_prod = coeff['coeff'] * assumed_array
@@ -223,6 +252,18 @@ class solver:
         
     
     def detect_possible_patterns(self, coeff_array, assumed_array):
+        # This function returns all possible patterns based on given assumption and a (first) equation.
+        # This function is a recursive function.
+        # The algorithm:
+        #   1: Verify "sum" is not negative.
+        #       It means the given assumption are wrong if it is negative.
+        #       This case can occur when the patterns are valid without considering this specific equation.
+        #   2: Get nCm patterns where n means the total of possible bomb positions and m means the total of bombs (="sum").
+        #   3: Verify nCm patterns exists. If no, it means no patterns can satisfy this equation.
+        #   4: Generate new assumption based on nCm patterns.
+        #   5: Verify if there are more euqations to consider. If no, it means the assumption is valid.
+        #   6: Consider next equation when there are more euqations to consider.
+        
         possible_patterns = []
         
         # Consider the first equation
@@ -289,6 +330,8 @@ class solver:
         return possible_patterns
     
     def apply_assumption_on_possible_patterns(self, patterns, assumed_array):
+        # This function merges possible patterns and assumed array.
+        # This is because possible patterns only considers non assumed positions.
         for pattern in patterns:
             pattern[assumed_array == 0] = 0
             pattern[assumed_array == 1] = 1
